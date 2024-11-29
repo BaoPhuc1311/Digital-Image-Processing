@@ -1,11 +1,19 @@
-import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import imageio.v2 as imageio  # Sử dụng imageio.v2 để giữ hành vi cũ
+
+def read_image(file_path):
+    """Đọc ảnh từ file dưới dạng ma trận số nguyên 8-bit."""
+    return imageio.imread(file_path)
+
+def save_image(image, file_path):
+    """Lưu ma trận ảnh thành file."""
+    imageio.imwrite(file_path, image)
 
 def Bai1(file_path):
     # Đọc ảnh màu và chuyển sang ảnh xám
-    image = cv2.imread(file_path)  # Đổi 'image.jpg' thành đường dẫn ảnh của bạn
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    image = read_image(file_path)  # Đọc ảnh vào ma trận
+    gray_image = np.dot(image[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
 
     # Vẽ histogram ban đầu (H1)
     plt.figure(figsize=(12, 4))
@@ -16,7 +24,12 @@ def Bai1(file_path):
     plt.ylabel('Frequency')
 
     # Histogram cân bằng (H2)
-    equalized_image = cv2.equalizeHist(gray_image)
+    # Tính histogram và CDF
+    hist, bins = np.histogram(gray_image.flatten(), bins=256, range=[0, 256])
+    cdf = hist.cumsum()  # Hàm phân bố tích lũy
+    cdf_normalized = (cdf - cdf.min()) * 255 / (cdf.max() - cdf.min())  # Chuẩn hóa CDF
+    equalized_image = cdf_normalized[gray_image]  # Ánh xạ cường độ từ CDF
+
     plt.subplot(1, 3, 2)
     plt.hist(equalized_image.ravel(), bins=256, range=(0, 256), color='black')
     plt.title('Histogram cân bằng (H2)')
@@ -24,8 +37,11 @@ def Bai1(file_path):
     plt.ylabel('Frequency')
 
     # Hiệu chỉnh thu hẹp H2 trong khoảng (50, 100)
-    # Chuyển đổi cường độ pixel từ khoảng [0, 255] sang [50, 100]
-    narrowed_image = cv2.normalize(equalized_image, None, 50, 100, cv2.NORM_MINMAX)
+    # Công thức chuyển đổi cường độ
+    a, b = 50, 100
+    narrowed_image = ((equalized_image - equalized_image.min()) * (b - a) /
+                      (equalized_image.max() - equalized_image.min()) + a).astype(np.uint8)
+
     plt.subplot(1, 3, 3)
     plt.hist(narrowed_image.ravel(), bins=256, range=(0, 256), color='black')
     plt.title('Histogram thu hẹp (50,100)')
@@ -37,6 +53,6 @@ def Bai1(file_path):
     plt.show()
 
     # Lưu các ảnh nếu cần thiết
-    cv2.imwrite('gray_image.jpg', gray_image)
-    cv2.imwrite('equalized_image.jpg', equalized_image)
-    cv2.imwrite('narrowed_image.jpg', narrowed_image)
+    save_image(gray_image, 'gray_image.jpg')
+    save_image(equalized_image.astype(np.uint8), 'equalized_image.jpg')
+    save_image(narrowed_image, 'narrowed_image.jpg')
