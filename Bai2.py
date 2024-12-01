@@ -1,66 +1,82 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import imageio.v2 as imageio  # Để đọc và lưu ảnh
+import imageio.v2 as imageio
+import numpy as np  # Để đọc và lưu ảnh
 
 def read_image(file_path):
     """Đọc ảnh từ file dưới dạng ma trận số nguyên 8-bit."""
     image = imageio.imread(file_path)
     if image.max() <= 1.0:  # Ảnh chuẩn hóa [0, 1]
-        image = (image * 255).astype(np.uint8)
+        image = (image * 255).astype(int)
     return image
 
 def save_image(image, file_path):
     """Lưu ma trận ảnh thành file."""
-    imageio.imwrite(file_path, image.astype(np.uint8))
+    # Chuyển đổi kiểu dữ liệu thành uint8 và đảm bảo giá trị trong phạm vi [0, 255]
+    image = np.clip(image, 0, 255).astype(np.uint8)
+    imageio.imwrite(file_path, image)
 
 def apply_convolution(image, kernel, padding=0, stride=1):
     """Hàm áp dụng tích chập với kernel, padding, và stride."""
-    h, w = image.shape
-    kernel_size = kernel.shape[0]
-    
+    h = len(image)
+    w = len(image[0])
+    kernel_size = len(kernel)
+
     # Thêm padding vào ảnh
-    padded_image = np.pad(image, pad_width=padding, mode='constant', constant_values=0)
-    new_h = (padded_image.shape[0] - kernel_size) // stride + 1
-    new_w = (padded_image.shape[1] - kernel_size) // stride + 1
-    output = np.zeros((new_h, new_w), dtype=np.float32)
+    padded_image = [[0] * (w + 2 * padding) for _ in range(h + 2 * padding)]
+    for i in range(h):
+        for j in range(w):
+            padded_image[i + padding][j + padding] = image[i][j]
+
+    new_h = (h + 2 * padding - kernel_size) // stride + 1
+    new_w = (w + 2 * padding - kernel_size) // stride + 1
+    output = [[0] * new_w for _ in range(new_h)]
 
     # Tích chập
     for y in range(new_h):
         for x in range(new_w):
-            region = padded_image[y * stride:y * stride + kernel_size, x * stride:x * stride + kernel_size]
-            output[y, x] = np.sum(region * kernel)
+            region = [padded_image[y * stride + i][x * stride + j] for i in range(kernel_size) for j in range(kernel_size)]
+            output[y][x] = sum(region[k] * kernel[k // kernel_size][k % kernel_size] for k in range(len(region)))
 
-    return np.clip(output, 0, 255).astype(np.uint8)
+    # Giới hạn giá trị ảnh trong phạm vi [0, 255]
+    return [[min(max(int(val), 0), 255) for val in row] for row in output]
 
 def apply_median_filter(image, kernel_size=3):
     """Hàm lọc trung vị."""
-    h, w = image.shape
+    h = len(image)
+    w = len(image[0])
     pad = kernel_size // 2
-    padded_image = np.pad(image, pad, mode='constant', constant_values=0)
-    output = np.zeros_like(image)
+    padded_image = [[0] * (w + 2 * pad) for _ in range(h + 2 * pad)]
+    for i in range(h):
+        for j in range(w):
+            padded_image[i + pad][j + pad] = image[i][j]
+
+    output = [[0] * w for _ in range(h)]
 
     for y in range(h):
         for x in range(w):
-            region = padded_image[y:y + kernel_size, x:x + kernel_size]
-            output[y, x] = np.median(region)
-    
+            region = [padded_image[y + i][x + j] for i in range(kernel_size) for j in range(kernel_size)]
+            output[y][x] = sorted(region)[len(region) // 2]
+
     return output
 
 def Bai2(file_path):
     # Đọc ảnh và chuyển sang ảnh xám
     image = read_image(file_path)
-    gray_image = np.dot(image[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+    gray_image = [
+        [int(image[i][j][0] * 0.299 + image[i][j][1] * 0.587 + image[i][j][2] * 0.114) for j in range(len(image[i]))]
+        for i in range(len(image))
+    ]
 
     # Kernel 3x3, padding = 1 (I1)
-    kernel_3x3 = np.ones((3, 3), dtype=np.float32) / 9
+    kernel_3x3 = [[1 / 9] * 3 for _ in range(3)]
     I1 = apply_convolution(gray_image, kernel_3x3, padding=1)
 
     # Kernel 5x5, padding = 2 (I2)
-    kernel_5x5 = np.ones((5, 5), dtype=np.float32) / 25
+    kernel_5x5 = [[1 / 25] * 5 for _ in range(5)]
     I2 = apply_convolution(gray_image, kernel_5x5, padding=2)
 
     # Kernel 7x7, padding = 3, stride = 2 (I3)
-    kernel_7x7 = np.ones((7, 7), dtype=np.float32) / 49
+    kernel_7x7 = [[1 / 49] * 7 for _ in range(7)]
     I3 = apply_convolution(gray_image, kernel_7x7, padding=3, stride=2)
 
     # Lọc trung vị ảnh I3 với lân cận 3x3 (I4)
@@ -91,8 +107,5 @@ def Bai2(file_path):
     plt.tight_layout()
     plt.show()
 
-    # Lưu kết quả
-    save_image(I1, 'I1_kernel_3x3.jpg')
-    save_image(I2, 'I2_kernel_5x5.jpg')
-    save_image(I3, 'I3_kernel_7x7_stride_2.jpg')
-    save_image(I4, 'I4_median_filtered.jpg')
+
+Bai2('picture.jpg')
